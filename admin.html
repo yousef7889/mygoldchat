@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔧 مدیریت چت Gold18</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Tahoma,sans-serif;background:#0a0f1a;color:#e2e8f0;padding:20px}
+h1{color:#f59e0b;margin-bottom:20px;font-size:20px}
+.section{background:rgba(15,23,42,.8);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:16px;margin-bottom:16px}
+.section h2{font-size:14px;color:#94a3b8;margin-bottom:10px}
+input,textarea,select{width:100%;background:#111827;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;color:#e2e8f0;font-size:13px;margin-bottom:8px;font-family:Tahoma}
+button{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;border-radius:8px;padding:10px 20px;cursor:pointer;font-size:13px;font-family:Tahoma;margin:4px}
+button:hover{opacity:.9}
+button.red{background:linear-gradient(135deg,#dc2626,#ef4444)}
+button.gold{background:linear-gradient(135deg,#d97706,#f59e0b)}
+.msg-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.msg-item .sender{color:#f59e0b;font-weight:700}
+.msg-item .text{color:#94a3b8;flex:1;margin:0 10px;word-break:break-word}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:14px;text-align:center}
+.stat .val{font-size:24px;font-weight:700;color:#3b82f6}
+.stat .lbl{font-size:10px;color:#64748b;margin-top:4px}
+#log{background:#000;border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#64748b;direction:ltr;text-align:left}
+.blocked-list span{display:inline-block;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 8px;margin:2px;font-size:11px;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>🔧 پنل مدیریت چت — Gold18 Pro</h1>
+
+<div class="stats" id="stats">
+  <div class="stat"><div class="val" id="sMsgs">-</div><div class="lbl">پیام‌ها</div></div>
+  <div class="stat"><div class="val" id="sOnline">-</div><div class="lbl">آنلاین</div></div>
+  <div class="stat"><div class="val" id="sBlocked">0</div><div class="lbl">بلاک‌شده</div></div>
+</div>
+
+<div class="section">
+  <h2>📢 تبلیغ بنر چت</h2>
+  <input id="adText" placeholder="متن تبلیغ...">
+  <input id="adLink" placeholder="لینک (اختیاری)">
+  <button class="gold" onclick="setAd()">📢 ذخیره تبلیغ</button>
+  <button class="red" onclick="removeAd()">❌ حذف</button>
+</div>
+
+<div class="section">
+  <h2>📝 ارسال پیام ربات</h2>
+  <textarea id="botMsg" rows="2" placeholder="پیام ربات..."></textarea>
+  <button onclick="sendBot()">🤖 ارسال</button>
+</div>
+
+<div class="section">
+  <h2>🗑️ مدیریت پیام‌ها (آخرین ۵۰ پیام)</h2>
+  <button class="red" onclick="clearAll()">🗑️ پاک کردن همه</button>
+  <div id="msgList" style="margin-top:10px;max-height:400px;overflow-y:auto"></div>
+</div>
+
+<div class="section">
+  <h2>📋 لاگ</h2>
+  <div id="log"></div>
+</div>
+
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import{getDatabase,ref,push,set,remove,onValue,query,limitToLast,orderByChild}from'https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js';
+
+const firebaseConfig={
+  apiKey:"AIzaSyARSnFDaD6Plqi4av5PqvHAs9ysKo31fsg",
+  authDomain:"mygold18chat.firebaseapp.com",
+  databaseURL:"https://mygold18chat-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"mygold18chat",
+  storageBucket:"mygold18chat.firebasestorage.app",
+  messagingSenderId:"171030046067",
+  appId:"1:171030046067:web:d7d9649ca1e43c56251106"
+};
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+function log(m){var el=document.getElementById('log');el.innerHTML+='['+new Date().toLocaleTimeString()+'] '+m+'<br>';el.scrollTop=el.scrollHeight;}
+
+// Stats
+onValue(ref(db,'online'),s=>{
+  var c=s.exists()?Object.keys(s.val()).length:0;
+  document.getElementById('sOnline').textContent=c;
+});
+
+// Messages
+var allMsgKeys=[];
+onValue(query(ref(db,'messages'),limitToLast(50)),s=>{
+  var el=document.getElementById('msgList');
+  el.innerHTML='';allMsgKeys=[];
+  document.getElementById('sMsgs').textContent=s.exists()?Object.keys(s.val()).length:0;
+  if(!s.exists())return;
+  var msgs=s.val();
+  Object.keys(msgs).reverse().forEach(k=>{
+    var m=msgs[k];allMsgKeys.push(k);
+    var d=document.createElement('div');d.className='msg-item';
+    d.innerHTML='<span class="sender">'+esc(m.sender||'?')+'</span>'
+      +'<span class="text">'+esc((m.text||'').substring(0,100))+'</span>'
+      +'<button class="red" style="padding:4px 8px;font-size:10px" onclick="window._delMsg(\''+k+'\')">🗑️</button>';
+    el.appendChild(d);
+  });
+});
+
+window._delMsg=function(k){
+  if(!confirm('حذف؟'))return;
+  remove(ref(db,'messages/'+k)).then(()=>log('حذف شد: '+k)).catch(e=>log('ERR: '+e));
+};
+
+window.clearAll=function(){
+  if(!confirm('همه پیام‌ها حذف شوند؟'))return;
+  remove(ref(db,'messages')).then(()=>log('همه پاک شد')).catch(e=>log('ERR: '+e));
+};
+
+window.sendBot=function(){
+  var t=document.getElementById('botMsg').value.trim();
+  if(!t)return;
+  push(ref(db,'messages'),{sender:'🤖 ربات',text:t,time:Date.now()})
+    .then(()=>{log('پیام ربات ارسال شد');document.getElementById('botMsg').value='';})
+    .catch(e=>log('ERR: '+e));
+};
+
+window.setAd=function(){
+  var t=document.getElementById('adText').value.trim();
+  if(!t)return;
+  var l=document.getElementById('adLink').value.trim();
+  set(ref(db,'ads/current'),{text:t,link:l}).then(()=>log('تبلیغ ذخیره شد')).catch(e=>log('ERR: '+e));
+};
+
+window.removeAd=function(){
+  remove(ref(db,'ads/current')).then(()=>log('تبلیغ حذف شد')).catch(e=>log('ERR: '+e));
+};
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+log('✅ پنل آماده');
+</script>
+</body>
+</html>
